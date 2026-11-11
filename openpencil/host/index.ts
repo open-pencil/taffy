@@ -75,6 +75,8 @@ export interface Style {
   padding?: Edges
   /** Points from each side of the containing block; a side left out is `auto`. */
   inset?: Edges
+  /** Points on each side, negative ones included. */
+  margin?: Edges
   columnGap?: number
   rowGap?: number
   aspectRatio?: number
@@ -153,7 +155,8 @@ const F = {
   GRID_ROW: 44,
   GRID_TEMPLATE_COLUMNS: 46,
   GRID_TEMPLATE_ROWS: 48,
-  STRIDE: 50
+  MARGIN: 50,
+  STRIDE: 54
 } as const
 
 const UNIT_AUTO = 0
@@ -302,6 +305,7 @@ function writeRecord(
   sides.forEach((side, i) => {
     record[F.PADDING + i] = s.padding?.[side] ?? 0
     record[F.INSET + i] = s.inset?.[side] ?? Number.NaN
+    record[F.MARGIN + i] = s.margin?.[side] ?? 0
   })
   record[F.COLUMN_GAP] = s.columnGap ?? 0
   record[F.ROW_GAP] = s.rowGap ?? 0
