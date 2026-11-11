@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { computeLayout, LayoutNode } from './index'
+// The built release, as packages load it: taffy.js with taffy.wasm beside it (bun build.ts).
+import { computeLayout, LayoutNode } from '../out/taffy.js'
 
 const box = (node: LayoutNode) => node.layout
 

@@ -1,8 +1,9 @@
 // Taffy for OpenPencil: build a tree of `LayoutNode`s with CSS styles, lay it out with one call
 // to `computeLayout`, and read each node's `layout`. The tree crosses into WebAssembly as one
 // batch of fixed-size records (`src/lib.rs`), and leaves with a `measure` function, such as text,
-// are measured on the way. Styles default to CSS's initial values.
-import moduleBase64 from './module.generated'
+// are measured on the way. Styles default to CSS's initial values. The module, `taffy.wasm`, sits
+// beside this file: a browser fetches it, which bundlers such as Vite see as an asset of this
+// module through `new URL(..., import.meta.url)`, and Node and Bun read it from disk.
 
 /** A length in points, a percentage of the containing block, or `auto`. */
 export type Length = number | `${number}%` | 'auto'
@@ -219,8 +220,7 @@ function availableSpace(value: number, kind: number): AvailableSpace {
   return kind === SPACE_MIN_CONTENT ? 'min-content' : 'max-content'
 }
 
-const bytes = Uint8Array.from(atob(moduleBase64), (char) => char.charCodeAt(0))
-const { instance } = await WebAssembly.instantiate(bytes, {
+const imports: WebAssembly.Imports = {
   env: {
     measure(
       index: number,
@@ -247,7 +247,25 @@ const { instance } = await WebAssembly.instantiate(bytes, {
       out[1] = size.height
     }
   }
-})
+}
+
+const MODULE_URL = new URL('./taffy.wasm', import.meta.url)
+
+async function instantiate(): Promise<WebAssembly.Instance> {
+  if (MODULE_URL.protocol === 'file:') {
+    const { readFile } = await import(/* @vite-ignore */ 'node:fs/promises')
+    return (await WebAssembly.instantiate(await readFile(MODULE_URL), imports)).instance
+  }
+  const response = await fetch(MODULE_URL)
+  if (!response.ok) throw new Error(`taffy.wasm failed to load from ${MODULE_URL}: ${response.status}`)
+  // Compiled while it downloads where it is served as WebAssembly.
+  if (response.headers.get('content-type')?.startsWith('application/wasm')) {
+    return (await WebAssembly.instantiateStreaming(response, imports)).instance
+  }
+  return (await WebAssembly.instantiate(await response.arrayBuffer(), imports)).instance
+}
+
+const instance = await instantiate()
 const wasm = instance.exports as unknown as Exports
 
 function writeLength(record: Float32Array, at: number, value: Length | undefined): void {
