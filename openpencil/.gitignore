@@ -1,4 +1,3 @@
 /target
 /out
 /node_modules
-/host/module.generated.ts

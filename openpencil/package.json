@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bun build.ts",
-    "test": "bun test host"
+    "test": "tsc -p tsconfig.json && bun test host"
   },
   "devDependencies": {
     "@types/bun": "1.3.14",
