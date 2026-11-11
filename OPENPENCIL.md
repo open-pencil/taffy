@@ -11,3 +11,4 @@ Branch `openpencil/taffy` of open-pencil/taffy: Taffy as OpenPencil uses it, for
 Each fix also goes upstream; drop it here once upstream has it and Blitz's pin includes it.
 
 - Flexbox: transfer a growing item's cross size through its aspect ratio — cherry-picked from DioxusLabs/taffy#1081 (fixes DioxusLabs/taffy#804), with fixtures for rows, columns, a max-width clamp, and a sibling.
+- Flexbox: size a row's line, and so a row without a height, from a growing item's cross size transferred through its aspect ratio from its used main size, as Chrome does; a column's width still comes from intrinsic sizes. Fixtures `aspect_ratio_flex_{row,column}_grow_sizes_auto_container`.

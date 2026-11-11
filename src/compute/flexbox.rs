@@ -147,6 +147,25 @@ impl FlexItem {
         self.overflow.x.is_scroll_container() | self.overflow.y.is_scroll_container()
     }
 
+    /// The cross size of an item whose cross size is transferred from its main size through its
+    /// aspect ratio (`cross_size_is_transferred`), derived from its used (target) main size and
+    /// clamped by the min and max sizes the ratio transfers.
+    fn transferred_cross_size(&self, dir: FlexDirection) -> f32 {
+        let box_sizing_adjustment =
+            if self.box_sizing == BoxSizing::ContentBox { (self.padding + self.border).sum_axes() } else { Size::ZERO };
+        let transferred_min_cross = self.min_size.maybe_apply_aspect_ratio(self.aspect_ratio).cross(dir);
+        let transferred_max_cross = self.max_size.maybe_apply_aspect_ratio(self.aspect_ratio).cross(dir);
+        let padding_border_sum = self.padding.cross_axis_sum(dir) + self.border.cross_axis_sum(dir);
+        Size::NONE
+            .with_main(dir, Some(self.target_size.main(dir) - box_sizing_adjustment.main(dir)))
+            .maybe_apply_aspect_ratio(self.aspect_ratio)
+            .maybe_add(box_sizing_adjustment)
+            .cross(dir)
+            .maybe_clamp(transferred_min_cross, transferred_max_cross)
+            .unwrap_or(0.0)
+            .max(padding_border_sum)
+    }
+
     /// Whether the used cross size of the item is the cross size of its flex line: it has a cross size of
     /// `stretch`, or of `auto` with `align-self: stretch`, and neither of its cross-axis margins is `auto`.
     #[inline(always)]
@@ -2073,6 +2092,16 @@ fn determine_hypothetical_cross_size(
             _ => child_available_cross,
         };
 
+        // A cross size transferred through the aspect ratio follows the item's used main size,
+        // which the hypothetical cross size is determined with (§9.4 step 7), rather than the
+        // size its content takes. Only in a row: a column's cross size is its inline size, which
+        // browsers settle from the items' intrinsic contributions before they flex.
+        let child_cross = match child_cross {
+            None if constants.is_row && child.cross_size_is_transferred => {
+                Some(child.transferred_cross_size(constants.dir))
+            }
+            known => known,
+        };
         let child_inner_cross = child_cross.unwrap_or_else(|| {
             tree.compute_child_layout(
                 child.node,
@@ -2326,32 +2355,9 @@ fn determine_used_cross_size(
                         max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
                 } else if child.cross_size_is_transferred {
-                    // If the cross size is transferred from the main size through the aspect ratio
-                    // then it is re-derived from the used (target) main size rather than taken from
-                    // the hypothetical cross size, which was transferred from the flex base size
-                    // before flexing.
-                    let box_sizing_adjustment = if child.box_sizing == BoxSizing::ContentBox {
-                        (child.padding + child.border).sum_axes()
-                    } else {
-                        Size::ZERO
-                    };
-                    let transferred_min_cross =
-                        child.min_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(constants.dir);
-                    let transferred_max_cross =
-                        child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(constants.dir);
-                    let padding_border_sum =
-                        child.padding.cross_axis_sum(constants.dir) + child.border.cross_axis_sum(constants.dir);
-                    Size::NONE
-                        .with_main(
-                            constants.dir,
-                            Some(child.target_size.main(constants.dir) - box_sizing_adjustment.main(constants.dir)),
-                        )
-                        .maybe_apply_aspect_ratio(child.aspect_ratio)
-                        .maybe_add(box_sizing_adjustment)
-                        .cross(constants.dir)
-                        .maybe_clamp(transferred_min_cross, transferred_max_cross)
-                        .unwrap_or(0.0)
-                        .max(padding_border_sum)
+                    // A cross size transferred from the main size through the aspect ratio is
+                    // re-derived from the used (target) main size.
+                    child.transferred_cross_size(constants.dir)
                 } else {
                     child.hypothetical_inner_size.cross(constants.dir)
                 },
