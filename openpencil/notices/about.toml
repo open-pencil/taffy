@@ -1,0 +1,6 @@
+# The licenses the crates compiled into taffy.js may carry.
+accepted = ["MIT", "Apache-2.0", "Zlib", "BSD-2-Clause", "BSD-3-Clause", "Unicode-3.0"]
+targets = ["wasm32-unknown-unknown"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+private = { ignore = true }

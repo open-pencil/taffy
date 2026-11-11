@@ -1,0 +1,23 @@
+[package]
+name = "openpencil-taffy"
+version = "0.0.0"
+description = "Taffy as OpenPencil lays out auto layout: a batched WebAssembly interface for a whole tree."
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+taffy = { path = "..", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "content_size"] }
+
+# Its own workspace, outside Taffy's, so Taffy's MSRV and lockfile stay as upstream has them.
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
