@@ -53,7 +53,9 @@ mod field {
     /// Offset and count into the track array.
     pub const GRID_TEMPLATE_COLUMNS: usize = 46;
     pub const GRID_TEMPLATE_ROWS: usize = 48;
-    pub const STRIDE: usize = 50;
+    /// Left, top, right, bottom, in points.
+    pub const MARGIN: usize = 50;
+    pub const STRIDE: usize = 54;
 }
 
 /// Units of a length: points or a percentage as a fraction; any other code is `auto`.
@@ -234,6 +236,12 @@ fn style(r: &[f32], all_tracks: &[f32]) -> Style {
             bottom: side(field::PADDING, 3),
         },
         inset: Rect { left: inset(0), top: inset(1), right: inset(2), bottom: inset(3) },
+        margin: Rect {
+            left: LengthPercentageAuto::length(r[field::MARGIN]),
+            top: LengthPercentageAuto::length(r[field::MARGIN + 1]),
+            right: LengthPercentageAuto::length(r[field::MARGIN + 2]),
+            bottom: LengthPercentageAuto::length(r[field::MARGIN + 3]),
+        },
         gap: Size {
             width: LengthPercentage::length(r[field::COLUMN_GAP]),
             height: LengthPercentage::length(r[field::ROW_GAP]),
@@ -247,7 +255,6 @@ fn style(r: &[f32], all_tracks: &[f32]) -> Style {
     }
 }
 
-/// `margin` keeps Taffy's zero default: auto layout has none, and `inset` places absolute boxes.
 fn available(value: f32) -> AvailableSpace {
     if value.is_nan() { AvailableSpace::MaxContent } else { AvailableSpace::Definite(value) }
 }

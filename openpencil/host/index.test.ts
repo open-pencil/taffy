@@ -40,6 +40,14 @@ describe('computeLayout', () => {
     expect(box(b).left).toBe(200 - 15 - 50 - 10 - 50)
   })
 
+  test('applies negative margins', () => {
+    const root = new LayoutNode({ width: 100, height: 100 })
+    const inner = new LayoutNode({ flexGrow: 1, margin: { left: -10, right: -20 } })
+    root.append(inner)
+    computeLayout(root)
+    expect(inner.layout).toMatchObject({ left: -10, width: 130 })
+  })
+
   test('places absolute children by inset', () => {
     const root = new LayoutNode({ width: 100, height: 100 })
     const child = new LayoutNode({
