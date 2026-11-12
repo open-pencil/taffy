@@ -289,62 +289,108 @@ function writeTrack(tracks: number[], track: GridTrack): void {
   else tracks.push(TRACK_PERCENT, Number.parseFloat(track) / 100)
 }
 
+function writeEdges(
+  records: Float32Array,
+  at: number,
+  edges: Edges | undefined,
+  missing: number
+): void {
+  records[at] = edges?.left ?? missing
+  records[at + 1] = edges?.top ?? missing
+  records[at + 2] = edges?.right ?? missing
+  records[at + 3] = edges?.bottom ?? missing
+}
+
+function writePlacement(records: Float32Array, at: number, placement: GridPlacement | undefined) {
+  const start = placement?.start
+  records[at] = start === undefined || start === 'auto' ? 0 : start
+  records[at + 1] = placement?.span ?? 1
+}
+
+function writeTracks(
+  records: Float32Array,
+  at: number,
+  list: readonly GridTrack[] | undefined,
+  tracks: number[]
+): void {
+  records[at] = tracks.length / 2
+  records[at + 1] = list?.length ?? 0
+  if (list) for (const track of list) writeTrack(tracks, track)
+}
+
+// Every field is written, since the buffer is reused from the call before.
 function writeRecord(
-  record: Float32Array,
+  records: Float32Array,
+  r: number,
   node: LayoutNode,
   parent: number,
   tracks: number[]
 ): void {
   const s = node.style
-  record[F.PARENT] = parent
-  record[F.DISPLAY] = DISPLAY[s.display ?? 'flex']
-  record[F.DIRECTION] = s.direction === 'rtl' ? 1 : 0
-  record[F.POSITION] = s.position === 'absolute' ? 1 : 0
-  record[F.BOX_SIZING] = s.boxSizing === 'content-box' ? 1 : 0
-  record[F.OVERFLOW] = OVERFLOW[s.overflow ?? 'visible']
-  record[F.FLEX_DIRECTION] = FLEX_DIRECTION[s.flexDirection ?? 'row']
-  record[F.FLEX_WRAP] = FLEX_WRAP[s.flexWrap ?? 'nowrap']
-  record[F.JUSTIFY_CONTENT] = s.justifyContent ? ALIGN_CONTENT[s.justifyContent] : 0
-  record[F.ALIGN_CONTENT] = s.alignContent ? ALIGN_CONTENT[s.alignContent] : 0
-  record[F.ALIGN_ITEMS] = s.alignItems ? ALIGN_ITEMS[s.alignItems] : 0
-  record[F.JUSTIFY_ITEMS] = s.justifyItems ? ALIGN_ITEMS[s.justifyItems] : 0
-  record[F.ALIGN_SELF] = s.alignSelf ? ALIGN_ITEMS[s.alignSelf] : 0
-  record[F.JUSTIFY_SELF] = s.justifySelf ? ALIGN_ITEMS[s.justifySelf] : 0
-  record[F.FLEX_GROW] = s.flexGrow ?? 0
-  record[F.FLEX_SHRINK] = s.flexShrink ?? 1
-  writeLength(record, F.FLEX_BASIS, s.flexBasis)
-  writeLength(record, F.WIDTH, s.width)
-  writeLength(record, F.HEIGHT, s.height)
-  writeLength(record, F.MIN_WIDTH, s.minWidth)
-  writeLength(record, F.MIN_HEIGHT, s.minHeight)
-  writeLength(record, F.MAX_WIDTH, s.maxWidth)
-  writeLength(record, F.MAX_HEIGHT, s.maxHeight)
-  const sides = ['left', 'top', 'right', 'bottom'] as const
-  sides.forEach((side, i) => {
-    record[F.PADDING + i] = s.padding?.[side] ?? 0
-    record[F.INSET + i] = s.inset?.[side] ?? Number.NaN
-    record[F.MARGIN + i] = s.margin?.[side] ?? 0
-  })
-  record[F.COLUMN_GAP] = s.columnGap ?? 0
-  record[F.ROW_GAP] = s.rowGap ?? 0
-  record[F.ASPECT_RATIO] = s.aspectRatio ?? Number.NaN
-  record[F.MEASURED] = node.measure && node.children.length === 0 ? 1 : 0
-  for (const [at, placement] of [
-    [F.GRID_COLUMN, s.gridColumn],
-    [F.GRID_ROW, s.gridRow]
-  ] as const) {
-    const start = placement?.start
-    record[at] = start === undefined || start === 'auto' ? 0 : start
-    record[at + 1] = placement?.span ?? 1
+  records[r + F.PARENT] = parent
+  records[r + F.DISPLAY] = DISPLAY[s.display ?? 'flex']
+  records[r + F.DIRECTION] = s.direction === 'rtl' ? 1 : 0
+  records[r + F.POSITION] = s.position === 'absolute' ? 1 : 0
+  records[r + F.BOX_SIZING] = s.boxSizing === 'content-box' ? 1 : 0
+  records[r + F.OVERFLOW] = OVERFLOW[s.overflow ?? 'visible']
+  records[r + F.FLEX_DIRECTION] = FLEX_DIRECTION[s.flexDirection ?? 'row']
+  records[r + F.FLEX_WRAP] = FLEX_WRAP[s.flexWrap ?? 'nowrap']
+  records[r + F.JUSTIFY_CONTENT] = s.justifyContent ? ALIGN_CONTENT[s.justifyContent] : 0
+  records[r + F.ALIGN_CONTENT] = s.alignContent ? ALIGN_CONTENT[s.alignContent] : 0
+  records[r + F.ALIGN_ITEMS] = s.alignItems ? ALIGN_ITEMS[s.alignItems] : 0
+  records[r + F.JUSTIFY_ITEMS] = s.justifyItems ? ALIGN_ITEMS[s.justifyItems] : 0
+  records[r + F.ALIGN_SELF] = s.alignSelf ? ALIGN_ITEMS[s.alignSelf] : 0
+  records[r + F.JUSTIFY_SELF] = s.justifySelf ? ALIGN_ITEMS[s.justifySelf] : 0
+  records[r + F.FLEX_GROW] = s.flexGrow ?? 0
+  records[r + F.FLEX_SHRINK] = s.flexShrink ?? 1
+  writeLength(records, r + F.FLEX_BASIS, s.flexBasis)
+  writeLength(records, r + F.WIDTH, s.width)
+  writeLength(records, r + F.HEIGHT, s.height)
+  writeLength(records, r + F.MIN_WIDTH, s.minWidth)
+  writeLength(records, r + F.MIN_HEIGHT, s.minHeight)
+  writeLength(records, r + F.MAX_WIDTH, s.maxWidth)
+  writeLength(records, r + F.MAX_HEIGHT, s.maxHeight)
+  writeEdges(records, r + F.PADDING, s.padding, 0)
+  writeEdges(records, r + F.INSET, s.inset, Number.NaN)
+  writeEdges(records, r + F.MARGIN, s.margin, 0)
+  records[r + F.COLUMN_GAP] = s.columnGap ?? 0
+  records[r + F.ROW_GAP] = s.rowGap ?? 0
+  records[r + F.ASPECT_RATIO] = s.aspectRatio ?? Number.NaN
+  records[r + F.MEASURED] = node.measure && node.children.length === 0 ? 1 : 0
+  writePlacement(records, r + F.GRID_COLUMN, s.gridColumn)
+  writePlacement(records, r + F.GRID_ROW, s.gridRow)
+  writeTracks(records, r + F.GRID_TEMPLATE_COLUMNS, s.gridTemplateColumns, tracks)
+  writeTracks(records, r + F.GRID_TEMPLATE_ROWS, s.gridTemplateRows, tracks)
+}
+
+/** A buffer in the module's memory, kept between calls and grown when a tree needs more. */
+interface Buffer {
+  ptr: number
+  capacity: number
+}
+
+const recordBuffer: Buffer = { ptr: 0, capacity: 0 }
+const trackBuffer: Buffer = { ptr: 0, capacity: 0 }
+
+function reserve(buffer: Buffer, length: number): number {
+  if (length > buffer.capacity) {
+    if (buffer.capacity > 0) wasm.free_f32(buffer.ptr, buffer.capacity)
+    // Grown by half again, so a tree that keeps growing a little does not reallocate each call.
+    buffer.capacity = Math.max(length, Math.ceil(buffer.capacity * 1.5))
+    buffer.ptr = wasm.alloc_f32(buffer.capacity)
   }
-  for (const [at, list] of [
-    [F.GRID_TEMPLATE_COLUMNS, s.gridTemplateColumns],
-    [F.GRID_TEMPLATE_ROWS, s.gridTemplateRows]
-  ] as const) {
-    record[at] = tracks.length / 2
-    record[at + 1] = list?.length ?? 0
-    for (const track of list ?? []) writeTrack(tracks, track)
-  }
+  return buffer.ptr
+}
+
+/** The nodes of the last tree laid out, in record order; reused, since most calls lay out one tree again. */
+const order: LayoutNode[] = []
+const parents: number[] = []
+
+function collect(node: LayoutNode, parent: number): void {
+  const index = order.length
+  order.push(node)
+  parents.push(parent)
+  for (const child of node.children) collect(child, index)
 }
 
 /**
@@ -355,49 +401,43 @@ export function computeLayout(
   root: LayoutNode,
   available: { width?: number; height?: number } = {}
 ): void {
-  const nodes: LayoutNode[] = []
-  const parents: number[] = []
-  const visit = (node: LayoutNode, parent: number) => {
-    const index = nodes.length
-    nodes.push(node)
-    parents.push(parent)
-    for (const child of node.children) visit(child, index)
-  }
-  visit(root, -1)
+  // The buffers and node order are shared: a measure function cannot lay out another tree.
+  if (measuring.length > 0) throw new Error('computeLayout cannot run inside a measure function')
+  order.length = 0
+  parents.length = 0
+  collect(root, -1)
+  const count = order.length
 
-  const records = new Float32Array(nodes.length * F.STRIDE)
+  const recordsPtr = reserve(recordBuffer, count * F.STRIDE)
+  // Allocating can grow, and so detach, the module's memory: views are made after it.
+  const records = new Float32Array(wasm.memory.buffer, recordsPtr, count * F.STRIDE)
   const tracks: number[] = []
-  nodes.forEach((node, i) => {
-    writeRecord(records.subarray(i * F.STRIDE, (i + 1) * F.STRIDE), node, parents[i], tracks)
-  })
+  for (let i = 0; i < count; i++) writeRecord(records, i * F.STRIDE, order[i], parents[i], tracks)
+  const tracksPtr = reserve(trackBuffer, tracks.length)
+  if (tracks.length > 0) new Float32Array(wasm.memory.buffer, tracksPtr, tracks.length).set(tracks)
 
-  const recordsPtr = wasm.alloc_f32(records.length)
-  const tracksPtr = wasm.alloc_f32(tracks.length)
+  measuring = order
   try {
-    new Float32Array(wasm.memory.buffer, recordsPtr, records.length).set(records)
-    new Float32Array(wasm.memory.buffer, tracksPtr, tracks.length).set(tracks)
-    measuring = nodes
     const out = wasm.compute(
       recordsPtr,
-      nodes.length,
+      count,
       tracksPtr,
       tracks.length / 2,
       available.width ?? Number.NaN,
       available.height ?? Number.NaN
     )
     // Read after `compute`: measuring may have grown, and so detached, the memory.
-    const boxes = new Float32Array(wasm.memory.buffer, out, nodes.length * 4)
-    nodes.forEach((node, i) => {
-      node.layout = {
-        left: boxes[i * 4],
-        top: boxes[i * 4 + 1],
-        width: boxes[i * 4 + 2],
-        height: boxes[i * 4 + 3]
+    const boxes = new Float32Array(wasm.memory.buffer, out, count * 4)
+    for (let i = 0; i < count; i++) {
+      const at = i * 4
+      order[i].layout = {
+        left: boxes[at],
+        top: boxes[at + 1],
+        width: boxes[at + 2],
+        height: boxes[at + 3]
       }
-    })
+    }
   } finally {
     measuring = []
-    wasm.free_f32(recordsPtr, records.length)
-    wasm.free_f32(tracksPtr, tracks.length)
   }
 }
