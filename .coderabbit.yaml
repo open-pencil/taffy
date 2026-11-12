@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# OpenPencil's fork: pull requests into its openpencil/ release branch are reviewed (AGENTS.md).
+language: "en-US"
+early_access: false
+tone_instructions: >-
+  Be concise and direct. Use short paragraphs or bullets.
+  No emojis, praise, jokes, decorative headings, or unnecessary tables.
+  Explain the concrete problem, consequence, and suggested correction.
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: false
+  review_status: false
+  changed_files_summary: false
+  estimate_code_review_effort: false
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # The default branch mirrors upstream; OpenPencil's work goes into openpencil/<name>.
+    base_branches:
+      - "openpencil/.*"
