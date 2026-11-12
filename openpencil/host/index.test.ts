@@ -104,4 +104,22 @@ describe('computeLayout', () => {
     expect(box(hidden)).toMatchObject({ width: 0, height: 0 })
     expect(box(root)).toMatchObject({ width: 30, height: 10 })
   })
+
+  test('rethrows what a measure function throws and keeps working after it', () => {
+    const failure = new Error('measure failed')
+    // Each throw that unwound through the module used to leave its stack pointer lower; a few
+    // hundred of them ran it off the end of the stack.
+    for (let i = 0; i < 2000; i++) {
+      const root = new LayoutNode({ width: 300, height: 100, flexDirection: 'row' })
+      const text = new LayoutNode()
+      text.measure = () => {
+        throw failure
+      }
+      root.append(text)
+      expect(() => computeLayout(root)).toThrow(failure)
+    }
+    const root = new LayoutNode({ width: 300, height: 100 })
+    computeLayout(root)
+    expect(box(root)).toMatchObject({ width: 300, height: 100 })
+  })
 })

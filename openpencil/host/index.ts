@@ -202,6 +202,8 @@ interface Exports {
   alloc_f32(len: number): number
   free_f32(ptr: number, len: number): void
   measure_result(): number
+  /** Rust's shadow stack pointer, put back when a call traps part way. */
+  __stack_pointer: WebAssembly.Global
   compute(
     records: number,
     count: number,
@@ -214,6 +216,14 @@ interface Exports {
 
 /** The nodes of the tree being laid out, by record index, for `measure` calls back from Taffy. */
 let measuring: LayoutNode[] = []
+
+/**
+ * The first error a measure function threw during the call. An exception must not unwind through
+ * the module: its frames would never put Rust's stack pointer back, and after a few hundred such
+ * calls it runs off the end of its stack. The measure answers zero instead, and the call rethrows
+ * the error once the module has returned.
+ */
+let measureError: { error: unknown } | undefined
 
 function availableSpace(value: number, kind: number): AvailableSpace {
   if (kind === SPACE_DEFINITE) return value
@@ -231,17 +241,24 @@ const imports: WebAssembly.Imports = {
       availableHeight: number,
       availableHeightKind: number
     ) {
-      const node = measuring[index]
-      const size = node.measure?.(
-        {
-          width: Number.isNaN(knownWidth) ? undefined : knownWidth,
-          height: Number.isNaN(knownHeight) ? undefined : knownHeight
-        },
-        {
-          width: availableSpace(availableWidth, availableWidthKind),
-          height: availableSpace(availableHeight, availableHeightKind)
+      let size: ReturnType<MeasureFunction> = { width: 0, height: 0 }
+      if (measureError === undefined) {
+        try {
+          size =
+            measuring[index].measure?.(
+              {
+                width: Number.isNaN(knownWidth) ? undefined : knownWidth,
+                height: Number.isNaN(knownHeight) ? undefined : knownHeight
+              },
+              {
+                width: availableSpace(availableWidth, availableWidthKind),
+                height: availableSpace(availableHeight, availableHeightKind)
+              }
+            ) ?? size
+        } catch (error) {
+          measureError = { error }
         }
-      ) ?? { width: 0, height: 0 }
+      }
       const out = new Float32Array(wasm.memory.buffer, wasm.measure_result(), 2)
       out[0] = size.width
       out[1] = size.height
@@ -417,8 +434,11 @@ export function computeLayout(
   if (tracks.length > 0) new Float32Array(wasm.memory.buffer, tracksPtr, tracks.length).set(tracks)
 
   measuring = order
+  measureError = undefined
+  const stack = wasm.__stack_pointer.value as number
+  let out: number
   try {
-    const out = wasm.compute(
+    out = wasm.compute(
       recordsPtr,
       count,
       tracksPtr,
@@ -426,18 +446,28 @@ export function computeLayout(
       available.width ?? Number.NaN,
       available.height ?? Number.NaN
     )
-    // Read after `compute`: measuring may have grown, and so detached, the memory.
-    const boxes = new Float32Array(wasm.memory.buffer, out, count * 4)
-    for (let i = 0; i < count; i++) {
-      const at = i * 4
-      order[i].layout = {
-        left: boxes[at],
-        top: boxes[at + 1],
-        width: boxes[at + 2],
-        height: boxes[at + 3]
-      }
-    }
+  } catch (error) {
+    // A trap leaves the stack pointer where the trapping frame had it; later calls need it back.
+    // What the call had allocated stays allocated, which is the lesser harm.
+    wasm.__stack_pointer.value = stack
+    throw error
   } finally {
     measuring = []
+  }
+  if (measureError !== undefined) {
+    const { error } = measureError
+    measureError = undefined
+    throw error
+  }
+  // Read after `compute`: measuring may have grown, and so detached, the memory.
+  const boxes = new Float32Array(wasm.memory.buffer, out, count * 4)
+  for (let i = 0; i < count; i++) {
+    const at = i * 4
+    order[i].layout = {
+      left: boxes[at],
+      top: boxes[at + 1],
+      width: boxes[at + 2],
+      height: boxes[at + 3]
+    }
   }
 }
