@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    An item with a width and a max-content height keeps that height rather than one its width transfers through its aspect ratio
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; width: 500px; align-items: flex-start;">
+  <div style="width: 100px; flex-shrink: 0; height: max-content; aspect-ratio: 2;">
+    <div style="width: 10px; height: 300px;"></div>
+  </div>
+</div>
+
+</body>
+</html>
