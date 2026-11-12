@@ -28,9 +28,12 @@ await mkdir(OUT, { recursive: true })
 
 // Paths in panic messages name the build machine's directories; map them to stable prefixes.
 const home = process.env.HOME ?? ''
-const rustflags = [`--remap-path-prefix=${ROOT}=openpencil`, `--remap-path-prefix=${home}=~`].join(
-  ' '
-)
+// The host puts Rust's stack pointer back after a trap, so the module exports it.
+const rustflags = [
+  `--remap-path-prefix=${ROOT}=openpencil`,
+  `--remap-path-prefix=${home}=~`,
+  '-C link-arg=--export=__stack_pointer'
+].join(' ')
 await Bun.spawn(['cargo', 'build', '--release', '--locked', '--target', TARGET], {
   cwd: ROOT,
   env: { ...process.env, RUSTFLAGS: rustflags },
