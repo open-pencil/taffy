@@ -1,6 +1,6 @@
 # Taffy for OpenPencil
 
-Branch `openpencil/taffy` of open-pencil/taffy: Taffy as OpenPencil uses it, for auto layout and, through Blitz, for HTML import.
+Branch `openpencil/taffy` of open-pencil/taffy: Taffy as OpenPencil uses it, for auto layout and, through Blitz, for HTML import. It changes only through reviewed pull requests; `AGENTS.md` has the rules.
 
 - **Base:** `affd437f`, the Taffy commit Blitz pins (DioxusLabs/taffy#1361), so open-pencil/open-pencil can patch Blitz's Taffy to this branch. Rebase onto Blitz's next pin when it moves.
 - **Releases:** every push builds `openpencil/` and releases it as `taffy-<commit>` (`.github/workflows/openpencil.yml`): `taffy.js`, the host, `taffy.wasm`, the module it loads from beside it, `taffy.d.ts`, `THIRD-PARTY-NOTICES.md`, and `SHA256SUMS`. open-pencil/open-pencil's `packages/taffy/release.json` pins one.
