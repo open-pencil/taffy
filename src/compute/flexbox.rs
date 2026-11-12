@@ -907,15 +907,18 @@ fn generate_anonymous_flex_items(
             };
             let raw_size =
                 child_style.size().maybe_resolve(percent_resolution_size, |val, basis| tree.calc(val, basis));
+            // A cross size that is a sizing keyword, such as `max-content`, keeps its own size: the
+            // aspect ratio transfers neither to the item's initial size nor after flexing.
+            let cross_is_sizing_keyword = child_style.size().cross(constants.dir).is_sizing_keyword();
+            let size = if cross_is_sizing_keyword { raw_size } else { raw_size.maybe_apply_aspect_ratio(aspect_ratio) };
             FlexItem {
                 node: child,
                 order: index as u32,
-                size: raw_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
-                // An `auto` cross size, or a percentage of an indefinite one, which behaves as
-                // `auto`; a sizing keyword such as `max-content` keeps its own size.
+                size: size.maybe_add(box_sizing_adjustment),
+                // An `auto` cross size, or a percentage of an indefinite one, which behaves as `auto`.
                 cross_size_is_transferred: aspect_ratio.is_some()
                     && raw_size.cross(constants.dir).is_none()
-                    && !child_style.size().cross(constants.dir).is_sizing_keyword(),
+                    && !cross_is_sizing_keyword,
                 size_style: child_style.size(),
                 box_sizing: child_style.box_sizing(),
                 min_size: child_style
