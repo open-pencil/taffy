@@ -37,7 +37,7 @@ jobs:
       - run: cargo fmt --check && cargo clippy --release --locked --target wasm32-unknown-unknown -- -D warnings
       - run: bun build.ts --commit "$GITHUB_SHA"
       - run: bun run test
-      - if: github.event_name != 'pull_request'
+      - if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "taffy-$GITHUB_SHA" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Taffy ${GITHUB_SHA::10}" --notes "Taffy for OpenPencil built from $GITHUB_SHA. See OPENPENCIL.md for the patches."
