@@ -19,7 +19,7 @@ use crate::style_helpers::TaffyMaxContent;
 use crate::tree::traits::{LayoutPartialTreeExt, LayoutTableContainer};
 use crate::tree::{
     AxisStaticEdge, AxisStaticPosition, Baselines, Layout, LayoutInput, LayoutOutput, NodeId, OofCandidate,
-    OofCandidates, OofPositioningArea, RequestedAxis, RunMode, ScrollableOverflow, SizingMode,
+    OofCandidates, OofPositioningArea, RequestedAxis, RequestedBaselines, RunMode, ScrollableOverflow, SizingMode,
 };
 use crate::util::sys::Vec;
 use crate::util::{MaybeMath, MaybeResolve, ResolveOrZero};
@@ -662,6 +662,7 @@ fn layout_captions(
                 run_mode,
                 vertical_margins_are_collapsible: Line::FALSE,
                 content_offset_y: 0.0,
+                requested_baselines: RequestedBaselines::NONE,
             },
         );
 
@@ -1041,6 +1042,7 @@ fn measure_cell_heights(
                 run_mode: if participates { RunMode::PerformLayout } else { RunMode::ComputeSize },
                 vertical_margins_are_collapsible: Line::FALSE,
                 content_offset_y: 0.0,
+                requested_baselines: RequestedBaselines::FIRST,
             },
         );
         sizing.height = output.size.height;
@@ -1073,9 +1075,9 @@ fn measure_cell_heights(
         // cells that are not baseline-aligned leave the row's baseline to its lowest cell's
         // content edge if no cell settles it (CSS 2.1 §17.5.3)
         let row = &mut rows[cell.row];
-        let is_empty = tree.child_count(cell.node_id) == 0 && output.baselines.first.is_none();
+        let is_empty = tree.child_count(cell.node_id) == 0 && output.baselines.first().is_none();
         if participates && !is_empty {
-            let baseline = output.baselines.first.unwrap_or(sizing.height - pb_bottom);
+            let baseline = output.baselines.first().unwrap_or(sizing.height - pb_bottom);
             sizing.baseline = Some(baseline);
             row.baseline = Some(row.baseline.map_or(baseline, |b: f32| b.max(baseline)));
         } else {
@@ -2184,6 +2186,7 @@ fn layout_cells(
                 run_mode: RunMode::PerformLayout,
                 vertical_margins_are_collapsible: Line::FALSE,
                 content_offset_y: sizing.shift,
+                requested_baselines: RequestedBaselines::NONE,
             },
         );
 
