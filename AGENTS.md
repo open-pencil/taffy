@@ -13,7 +13,7 @@ Branch `openpencil/taffy` is the Taffy that [OpenPencil](https://github.com/open
 
 - A change to Taffy's algorithm comes with fixtures in `test_fixtures/` that Chrome lays out, generated as Taffy's `CONTRIBUTING.md` describes, and the generated tests pass: `cargo test`.
 - Each fix is added to Patches in `OPENPENCIL.md` and offered upstream, following Taffy's rule of an issue comment before a pull request. A patch is dropped here once upstream has it and Blitz's pin includes it.
-- The base is the Taffy commit Blitz pins, so HTML import and auto layout share one Taffy; moving it is a rebase onto Blitz's next pin, in a pull request of its own.
+- The base is the Taffy that open-pencil/blitz's `openpencil/blitz` builds with, so HTML import and auto layout share one Taffy. Moving it is a pull request of its own: build the new base from upstream, replay this branch's own commits onto it, and join the old history with an `ours` merge, so the branch is never force-pushed.
 
 ## `openpencil/`
 

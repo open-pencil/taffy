@@ -514,6 +514,7 @@ fn resolve_item_baselines(
                     available_space: Size::MIN_CONTENT,
                     vertical_margins_are_collapsible: Line::FALSE,
                     requested_baselines: RequestedBaselines::FIRST,
+                    content_offset_y: 0.0,
                 },
             );
 

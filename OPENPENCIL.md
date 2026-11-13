@@ -2,7 +2,7 @@
 
 Branch `openpencil/taffy` of open-pencil/taffy: Taffy as OpenPencil uses it, for auto layout and, through Blitz, for HTML import. It changes only through reviewed pull requests; `AGENTS.md` has the rules.
 
-- **Base:** `affd437f`, the Taffy commit Blitz pins (DioxusLabs/taffy#1361), so open-pencil/open-pencil can patch Blitz's Taffy to this branch. Rebase onto Blitz's next pin when it moves.
+- **Base:** DioxusLabs/taffy#1380 (CSS table layout, `78da1fde`) with DioxusLabs/taffy#1361 (requested baselines, `be8edbbd`) merged into it: the Taffy that open-pencil/blitz's `openpencil/blitz` needs for the Blitz pull requests it carries, so open-pencil/open-pencil can patch Blitz's Taffy to this branch. Neither has merged upstream; move the base when they do, or when `openpencil/blitz` moves.
 - **Releases:** every push builds `openpencil/` and releases it as `taffy-<commit>` (`.github/workflows/openpencil.yml`): `taffy.js`, the host, `taffy.wasm`, the module it loads from beside it, `taffy.d.ts`, `THIRD-PARTY-NOTICES.md`, and `SHA256SUMS`. open-pencil/open-pencil's `packages/taffy/release.json` pins one.
 - **`openpencil/`:** a crate that takes a whole tree as fixed-size records in one call (`src/lib.rs`) and its TypeScript host (`host/index.ts`), which keep the record layout in step. `bun build.ts` builds the release into `out/`; `bun test host` tests the host against it.
 
