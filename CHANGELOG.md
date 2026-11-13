@@ -2,13 +2,27 @@
 
 ## Unreleased
 
+The MSRV is now 1.85.
+
+### Performance
+
+- `TaffyTree` switches to FxHash for node contexts when `std` is enabled, for faster hash computation.
+
 ### Fixed
 
 - Flexbox: `align-content: stretch` (and `normal`) and `justify-content: stretch` fall back to `flex-start` rather than `start` when the lines/items overflow the container, so overflowing lines in a `wrap-reverse` container (and items in a `row-reverse`/`column-reverse` container) are packed to the flex-start edge like in Chrome.
 - Grid: the clamp of an item's content-based minimum size to the fixed max track sizing functions it spans now leaves room for its margins and baseline shim (#1362).
+- Block/float: the auto height of a box that establishes a new block formatting context (e.g. a float or `display: flow-root`) and contains floats now includes its bottom padding and border below the bottom margin edge of those floats. Previously the floats' bottom edge was used as the box's outer height, so the bottom padding and border overlapped them.
+- Float: a zero-height float is now recorded in the float context, so content and boxes establishing a new block formatting context whose vertical extent crosses its position avoid it. Previously it only affected `clear` and the position of later floats.
+- Block: when a block with no top border or padding has a bottom border or padding, the margins of leading children that collapse through it (and so collapse with its own top margin) are no longer also added to its height. Previously such a block was too tall by the collapsed margin.
+- Block: the min-content contribution of a compressible replaced child (e.g. an image) with a percentage `width` or `max-width` now resolves that percentage against zero, so a shrink-to-fit block (e.g. an `inline-block` or float) holding a `width: 100%` image is capped by the available width rather than growing to the image's natural width.
 
 ### Changes
 
+- Upgrade `cssparser` to 0.38 (used by the `parse` feature). Parse error messages no longer name the offending token, as cssparser no longer stores it.
+- The `strict_provenance` feature is now a no-op: `CompactLength` always uses the strict provenance pointer APIs (stable since Rust 1.84).
+- `Cache` no longer implements `Serialize` when the `serde` feature is enabled.
+- `CacheTree::cache_get` and `Cache::get` now take `&self` rather than `&mut self`. `Cache` stores its measure-entry eviction clock in an `AtomicU16` (updated with relaxed loads and stores) so that a cache hit can record the entry as recently used through a shared reference.
 - `Baselines` now stores each baseline as a private `f32` (NaN for none) and exposes them through `Baselines::first()`/`Baselines::last()`; construct it with `Baselines::new`/`Baselines::from_first`/`Baselines::NONE`. `LayoutOutput` shrinks from 88 to 80 bytes.
 - `LayoutInput` gained a `requested_baselines: RequestedBaselines` field (`NONE`, `FIRST`, `LAST`, `BOTH`). A request (in either `RunMode`) must set the flags for the baselines it will read from the output; baselines that were not requested are not computed, so trees without baseline alignment or inline-level boxes do no baseline work. Block, Flexbox and Grid now compute first *and* last baselines, following the current spec rules (baseline-sharing group, then the first/last item with a baseline, then synthesised from the startmost/endmost item).
 - The cache records which baselines each entry (measurement or final layout) holds, and measurement entries store the baselines alongside the size, so a lookup that requests baselines only hits an entry that has them. `Cache` grows from 408 to 472 bytes.
@@ -19,6 +33,9 @@
 
 - Replace raw scrollable overflow rectangles in `Layout` and `LayoutOutput` with `ScrollableOverflow`, including physical reversed-scroll-origin flags and sign-restored `left()`, `right()`, `top()`, and `bottom()` accessors. Flex reverse directions and wrap-reverse now retain reachable negative overflow, while scroll containers clip unreachable overflow.
 - `BlockContext::place_floated_box` (and `FloatContext::place_floated_box`) now take a caller-defined `id: u64` for the box, which is stored on `PlacedFloatedBox`. `BlockContext::float_mark` and `BlockContext::floats_placed_since` read back the id and position of the floats placed since a mark, so that custom formatting contexts which place floats do not need to keep their own list of placements.
+- `BlockContext::find_content_slot` (and `FloatContext::find_content_slot`) now take the `height` of the content to be placed, and avoid the floats beside any part of that height rather than only those at its top edge. The returned `ContentSlot::height` is now how far down the slot's width stays valid (previously always infinite).
+- Add `FloatDirection::opposite` and a public `FloatInsets` type (`left`/`right`), which replaces the `[f32; 2]` insets and margins taken by `BlockContext::sub_context`, `BlockContext::apply_content_box_inset`, `BlockContext::find_bfc_slot` and the `FloatContext` placement methods.
+- `BfcSlot` (returned by `BlockContext::find_bfc_slot` and `FloatContext::find_bfc_slot`) has a new `height` field: how far down from its top the slot's widths stay valid. A box taller than this may be beside further floats.
 
 ## 0.15.1
 

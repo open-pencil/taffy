@@ -381,6 +381,7 @@ pub(super) fn align_and_position_item(
             available_space: grid_area_minus_item_margins_size.map(AvailableSpace::Definite),
             vertical_margins_are_collapsible: Line::FALSE,
             requested_baselines,
+            content_offset_y: 0.0,
         },
     );
 

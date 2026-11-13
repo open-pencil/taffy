@@ -1,0 +1,13 @@
+<test name="aspect_ratio_flex_row_grow_max_width_transfers_cross_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" direction="rtl" position="absolute" align-items="center" justify-content="center" width="2048px" height="512px" row-gap="8px" column-gap="8px">
+      <div direction="rtl" position="relative" flex-grow="1" flex-shrink="0" min-width="64px" min-height="64px" max-width="128px" max-height="128px" aspect-ratio="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2048" height="512">
+      <node x="960" y="192" width="128" height="128"/>
+    </node>
+  </expectations>
+</test>
