@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A row without a height takes its height from a growing item's aspect-ratio-derived height
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; width: 500px; align-items: flex-start;">
+  <div style="flex-grow: 1; aspect-ratio: 2;"></div>
+</div>
+
+</body>
+</html>

@@ -48,6 +48,11 @@ struct FlexItem {
     max_size: Size<Option<f32>>,
     /// The aspect ratio of this item
     aspect_ratio: Option<f32>,
+    /// Whether the item's cross size is transferred from its main size through the aspect ratio
+    /// (i.e. the cross size property is `auto` and the item has an aspect ratio)
+    cross_size_is_transferred: bool,
+    /// The box sizing mode of this item
+    box_sizing: BoxSizing,
     /// The cross-alignment of this item
     align_self: AlignSelf,
 
@@ -140,6 +145,44 @@ impl FlexItem {
     /// Returns true if the item is a <https://www.w3.org/TR/css-overflow-3/#scroll-container>
     fn is_scroll_container(&self) -> bool {
         self.overflow.x.is_scroll_container() | self.overflow.y.is_scroll_container()
+    }
+
+    /// The item's minimum and maximum cross sizes, with those its min and max main sizes transfer
+    /// through its aspect ratio where it sets none. The ratio relates content boxes under
+    /// `box-sizing: content-box`, so the padding and border that `min_size` and `max_size` include
+    /// come off before it applies and back on after.
+    fn transferred_cross_limits(&self, dir: FlexDirection) -> (Option<f32>, Option<f32>) {
+        let box_sizing_adjustment =
+            if self.box_sizing == BoxSizing::ContentBox { (self.padding + self.border).sum_axes() } else { Size::ZERO };
+        // A cross limit the item sets itself stays; the ratio fills in only one it leaves out.
+        let transfer = |limit: Size<Option<f32>>| {
+            Size {
+                width: limit.width.maybe_sub(box_sizing_adjustment.width),
+                height: limit.height.maybe_sub(box_sizing_adjustment.height),
+            }
+            .maybe_apply_aspect_ratio(self.aspect_ratio)
+            .maybe_add(box_sizing_adjustment)
+            .cross(dir)
+        };
+        (transfer(self.min_size), transfer(self.max_size))
+    }
+
+    /// The cross size of an item whose cross size is transferred from its main size through its
+    /// aspect ratio (`cross_size_is_transferred`), derived from its used (target) main size and
+    /// clamped by the min and max sizes the ratio transfers.
+    fn transferred_cross_size(&self, dir: FlexDirection) -> f32 {
+        let box_sizing_adjustment =
+            if self.box_sizing == BoxSizing::ContentBox { (self.padding + self.border).sum_axes() } else { Size::ZERO };
+        let (transferred_min_cross, transferred_max_cross) = self.transferred_cross_limits(dir);
+        let padding_border_sum = self.padding.cross_axis_sum(dir) + self.border.cross_axis_sum(dir);
+        Size::NONE
+            .with_main(dir, Some(self.target_size.main(dir) - box_sizing_adjustment.main(dir)))
+            .maybe_apply_aspect_ratio(self.aspect_ratio)
+            .maybe_add(box_sizing_adjustment)
+            .cross(dir)
+            .maybe_clamp(transferred_min_cross, transferred_max_cross)
+            .unwrap_or(0.0)
+            .max(padding_border_sum)
     }
 
     /// Whether the used cross size of the item is the cross size of its flex line: it has a cross size of
@@ -862,15 +905,22 @@ fn generate_anonymous_flex_items(
             } else {
                 Size::ZERO
             };
+            let raw_size =
+                child_style.size().maybe_resolve(percent_resolution_size, |val, basis| tree.calc(val, basis));
+            // A cross size that is a sizing keyword, such as `max-content`, keeps its own size: the
+            // aspect ratio transfers neither to the item's initial size nor after flexing.
+            let cross_is_sizing_keyword = child_style.size().cross(constants.dir).is_sizing_keyword();
+            let size = if cross_is_sizing_keyword { raw_size } else { raw_size.maybe_apply_aspect_ratio(aspect_ratio) };
             FlexItem {
                 node: child,
                 order: index as u32,
-                size: child_style
-                    .size()
-                    .maybe_resolve(percent_resolution_size, |val, basis| tree.calc(val, basis))
-                    .maybe_apply_aspect_ratio(aspect_ratio)
-                    .maybe_add(box_sizing_adjustment),
+                size: size.maybe_add(box_sizing_adjustment),
+                // An `auto` cross size, or a percentage of an indefinite one, which behaves as `auto`.
+                cross_size_is_transferred: aspect_ratio.is_some()
+                    && raw_size.cross(constants.dir).is_none()
+                    && !cross_is_sizing_keyword,
                 size_style: child_style.size(),
+                box_sizing: child_style.box_sizing(),
                 min_size: child_style
                     .min_size()
                     .maybe_resolve(percent_resolution_size, |val, basis| tree.calc(val, basis))
@@ -1245,8 +1295,12 @@ fn determine_flex_base_size(
 
             // 4.5. Automatic Minimum Size of Flex Items
             // https://www.w3.org/TR/css-flexbox-1/#min-size-auto
-            let clamped_min_content_size =
-                min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(transferred_max_size.main(dir));
+            // If the item has an aspect ratio, the content size suggestion is clamped by
+            // min/max cross sizes transferred through the aspect ratio.
+            let clamped_min_content_size = min_content_main_size
+                .maybe_clamp(transferred_min_size.main(dir), transferred_max_size.main(dir))
+                .maybe_min(child.size.main(dir))
+                .maybe_min(transferred_max_size.main(dir));
             clamped_min_content_size.maybe_max(padding_border_axes_sums.main(dir))
         });
 
@@ -2027,8 +2081,7 @@ fn determine_hypothetical_cross_size(
 
         // Sizes transferred through the aspect ratio clamp the hypothetical cross size
         // https://github.com/w3c/csswg-drafts/issues/10997
-        let transferred_min_cross = child.min_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(constants.dir);
-        let transferred_max_cross = child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(constants.dir);
+        let (transferred_min_cross, transferred_max_cross) = child.transferred_cross_limits(constants.dir);
 
         let child_cross = child
             .size
@@ -2064,6 +2117,16 @@ fn determine_hypothetical_cross_size(
             _ => child_available_cross,
         };
 
+        // A cross size transferred through the aspect ratio follows the item's used main size,
+        // which the hypothetical cross size is determined with (§9.4 step 7), rather than the
+        // size its content takes. Only in a row: a column's cross size is its inline size, which
+        // browsers settle from the items' intrinsic contributions before they flex.
+        // That holds even where a definite main size gave it a cross size before flexing.
+        let child_cross = if constants.is_row && child.cross_size_is_transferred {
+            Some(child.transferred_cross_size(constants.dir))
+        } else {
+            child_cross
+        };
         let child_inner_cross = child_cross.unwrap_or_else(|| {
             tree.compute_child_layout(
                 child.node,
@@ -2082,6 +2145,7 @@ fn determine_hypothetical_cross_size(
                         height: if constants.is_row { child_available_cross } else { child_available_main },
                     },
                     vertical_margins_are_collapsible: Line::FALSE,
+                    content_offset_y: 0.0,
                     requested_baselines: RequestedBaselines::NONE,
                 },
             )
@@ -2165,6 +2229,7 @@ fn calculate_children_base_lines(
                     .maybe_sub(child.margin.sum_axes())
                     .maybe_max(Size::ZERO),
                     vertical_margins_are_collapsible: Line::FALSE,
+                    content_offset_y: 0.0,
                     requested_baselines: RequestedBaselines::FIRST,
                 },
             );
@@ -2316,6 +2381,10 @@ fn determine_used_cross_size(
                         child.min_size.cross(constants.dir),
                         max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
+                } else if child.cross_size_is_transferred {
+                    // A cross size transferred from the main size through the aspect ratio is
+                    // re-derived from the used (target) main size.
+                    child.transferred_cross_size(constants.dir)
                 } else {
                     child.hypothetical_inner_size.cross(constants.dir)
                 },
@@ -2642,6 +2711,7 @@ fn calculate_flex_item(
             // The available space passed to the child excludes the child's margins
             available_space: (container_size - item.margin.sum_axes()).map(|s| s.max(0.0).into()),
             vertical_margins_are_collapsible: Line::FALSE,
+            content_offset_y: 0.0,
             requested_baselines,
         },
     );
@@ -2867,6 +2937,7 @@ fn item_baselines(
             available_space: (constants.container_size - item.margin.sum_axes()).map(|s| s.max(0.0).into()),
             vertical_margins_are_collapsible: Line::FALSE,
             requested_baselines: requested,
+            content_offset_y: 0.0,
         },
     );
     let height = layout_output.size.height;
@@ -3327,7 +3398,7 @@ mod balance {
         fn suffix_greedy_line_counts(&self) -> Vec<u32> {
             let item_count = self.item_count();
             let mut counts: Vec<u32> = new_vec_with_capacity(item_count + 1);
-            counts.extend(core::iter::repeat(0).take(item_count + 1));
+            counts.extend(core::iter::repeat_n(0, item_count + 1));
             // The (exclusive) end of the greedy first line of the suffix, which only moves
             // down as the suffix grows leftwards since lines starting earlier are larger
             let mut line_end = item_count;
@@ -3443,7 +3514,7 @@ mod balance {
         let zero_end = (row.fit_ends[start] as usize).min(row.max_end);
         if row.sizes.is_zero_item(zero_end + 1) {
             let cost = row.sizes.line_cost(start, zero_end) + row.prev[zero_end + 1];
-            if cost < min_cost || (cost == min_cost && min_end.map_or(true, |end| end < zero_end)) {
+            if cost < min_cost || (cost == min_cost && min_end.is_none_or(|end| end < zero_end)) {
                 min_cost = cost;
                 min_end = Some(zero_end);
             }
@@ -3505,7 +3576,7 @@ mod balance {
         if line_count == item_count {
             // One item per line is the only division (this covers `flex-line-count` of at least
             // the item count as well as every item overflowing a line of its own)
-            item_counts.extend(core::iter::repeat(1).take(item_count));
+            item_counts.extend(core::iter::repeat_n(1, item_count));
             return item_counts;
         }
 
@@ -3528,9 +3599,9 @@ mod balance {
             prev.push(sizes.line_cost(start, item_count - 1));
         }
         let mut cur: Vec<f64> = new_vec_with_capacity(item_count);
-        cur.extend(core::iter::repeat(INFEASIBLE).take(item_count));
+        cur.extend(core::iter::repeat_n(INFEASIBLE, item_count));
         let mut opts: Vec<u32> = new_vec_with_capacity((line_count - 1) * item_count);
-        opts.extend(core::iter::repeat(0).take((line_count - 1) * item_count));
+        opts.extend(core::iter::repeat_n(0, (line_count - 1) * item_count));
         for lines in 2..=line_count {
             // The remaining `lines - 1` lines need one item each, bounding this line's end
             let max_end = item_count - lines;

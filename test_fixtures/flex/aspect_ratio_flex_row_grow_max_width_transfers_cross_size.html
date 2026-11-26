@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A growing item capped by max-width takes its height from the capped width through aspect-ratio
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; width: 2048px; height: 512px; gap: 8px; justify-content: center; align-items: center;">
+  <div style="min-width: 64px; min-height: 64px; max-width: 128px; max-height: 128px; flex-grow: 1; flex-shrink: 0; aspect-ratio: 1;"></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A minimum width transfers through the aspect ratio from the content box, without the item's padding
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; width: 500px; height: 300px; align-items: flex-start;">
+  <div style="flex: 0 0 100px; min-width: 100px; padding: 0 10px; aspect-ratio: 2;"></div>
+</div>
+
+</body>
+</html>

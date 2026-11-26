@@ -1,0 +1,13 @@
+<test name="aspect_ratio_flex_row_grow_transfers_cross_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" direction="ltr" position="absolute" align-items="flex-start" width="500px" height="100px">
+      <div direction="ltr" position="relative" flex-grow="1" aspect-ratio="2"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="500" height="100">
+      <node x="0" y="0" width="500" height="250"/>
+    </node>
+  </expectations>
+</test>

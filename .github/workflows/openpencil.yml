@@ -1,0 +1,43 @@
+# OpenPencil: builds and tests openpencil/ for every pull request against openpencil/taffy, and at
+# every push to it, which is a merged pull request, releases it as taffy-<commit>; that is what
+# open-pencil/open-pencil's packages/taffy pins and fetches.
+name: OpenPencil
+
+on:
+  push:
+    branches: [openpencil/taffy]
+  pull_request:
+    branches: [openpencil/taffy]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openpencil-${{ github.sha }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: openpencil
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          no-cache: true
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-about@0.9.3
+      - run: bun install --frozen-lockfile
+      - run: cargo fmt --check && cargo clippy --release --locked --target wasm32-unknown-unknown -- -D warnings
+      - run: bun build.ts --commit "$GITHUB_SHA"
+      - run: bun run test
+      - if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "taffy-$GITHUB_SHA" out/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Taffy ${GITHUB_SHA::10}" --notes "Taffy for OpenPencil built from $GITHUB_SHA. See OPENPENCIL.md for the patches."

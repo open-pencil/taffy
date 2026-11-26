@@ -1,0 +1,15 @@
+<test name="aspect_ratio_flex_row_grow_with_sibling_transfers_cross_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" direction="rtl" position="absolute" align-items="flex-start" width="400px" height="100px">
+      <div direction="rtl" position="relative" flex-grow="1" width="50px" height="50px"/>
+      <div direction="rtl" position="relative" flex-grow="1" aspect-ratio="2"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="400" height="100">
+      <node x="175" y="0" width="225" height="50"/>
+      <node x="0" y="0" width="175" height="88"/>
+    </node>
+  </expectations>
+</test>

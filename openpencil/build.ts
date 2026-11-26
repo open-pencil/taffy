@@ -1,0 +1,108 @@
+// Builds the release open-pencil/open-pencil's packages/taffy pins, into out/:
+//   taffy.js                 the host (host/index.ts), which loads taffy.wasm from beside it
+//   taffy.wasm               the WebAssembly module (src/lib.rs)
+//   taffy.d.ts               the host's types
+//   THIRD-PARTY-NOTICES.md   the licenses of the crates compiled into the module (cargo-about)
+//   SHA256SUMS               each file's SHA-256
+//   bun build.ts [--commit <sha>]
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+const ROOT = import.meta.dir
+const OUT = join(ROOT, 'out')
+const TARGET = 'wasm32-unknown-unknown'
+
+async function run(command: string[]): Promise<string> {
+  const child = Bun.spawn(command, { cwd: ROOT, stdout: 'pipe', stderr: 'inherit' })
+  const [stdout, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
+  if (code !== 0) throw new Error(`${command.join(' ')} exited with ${code}`)
+  return stdout
+}
+
+const commitFlag = process.argv.indexOf('--commit')
+const commit =
+  commitFlag === -1 ? (await run(['git', 'rev-parse', 'HEAD'])).trim() : process.argv[commitFlag + 1]
+
+await rm(OUT, { recursive: true, force: true })
+await mkdir(OUT, { recursive: true })
+
+// Paths in panic messages name the build machine's directories; map them to stable prefixes.
+const home = process.env.HOME ?? ''
+// The host puts Rust's stack pointer back after a trap, so the module exports it.
+const rustflags = [
+  `--remap-path-prefix=${ROOT}=openpencil`,
+  `--remap-path-prefix=${home}=~`,
+  '-C link-arg=--export=__stack_pointer'
+].join(' ')
+await Bun.spawn(['cargo', 'build', '--release', '--locked', '--target', TARGET], {
+  cwd: ROOT,
+  env: { ...process.env, RUSTFLAGS: rustflags },
+  stdout: 'inherit',
+  stderr: 'inherit'
+}).exited.then((code) => {
+  if (code !== 0) throw new Error(`cargo build exited with ${code}`)
+})
+await writeFile(
+  join(OUT, 'taffy.wasm'),
+  await readFile(join(ROOT, 'target', TARGET, 'release', 'openpencil_taffy.wasm'))
+)
+
+const bundle = await Bun.build({
+  entrypoints: [join(ROOT, 'host', 'index.ts')],
+  format: 'esm',
+  target: 'browser',
+  banner: `// Taffy for OpenPencil, built from open-pencil/taffy ${commit}.`
+})
+if (!bundle.success) throw new AggregateError(bundle.logs, 'bundling host/index.ts failed')
+await writeFile(join(OUT, 'taffy.js'), await bundle.outputs[0].text())
+
+// The host's own types only: the tests import the built taffy.js and are checked once it exists.
+await run([
+  'bunx',
+  'tsc',
+  'host/index.ts',
+  '--declaration',
+  '--emitDeclarationOnly',
+  '--strict',
+  '--skipLibCheck',
+  '--target',
+  'ES2023',
+  '--lib',
+  'ES2023,DOM',
+  '--module',
+  'ESNext',
+  '--moduleResolution',
+  'Bundler',
+  '--types',
+  'bun',
+  '--outDir',
+  join(OUT, 'types')
+])
+await writeFile(join(OUT, 'taffy.d.ts'), await readFile(join(OUT, 'types', 'index.d.ts')))
+await rm(join(OUT, 'types'), { recursive: true })
+
+const notices = await run([
+  'cargo',
+  'about',
+  'generate',
+  '--locked',
+  '-c',
+  'notices/about.toml',
+  'notices/about.hbs'
+])
+await writeFile(
+  join(OUT, 'THIRD-PARTY-NOTICES.md'),
+  notices.replace('the commit this release names', commit)
+)
+
+const names = ['taffy.js', 'taffy.wasm', 'taffy.d.ts', 'THIRD-PARTY-NOTICES.md']
+const sums = await Promise.all(
+  names.map(async (name) => {
+    const hash = new Bun.CryptoHasher('sha256')
+      .update(await readFile(join(OUT, name)))
+      .digest('hex')
+    return `${hash}  ${name}\n`
+  })
+)
+await writeFile(join(OUT, 'SHA256SUMS'), sums.join(''))
+process.stdout.write(`Built out/ from ${commit}:\n${sums.join('')}`)
