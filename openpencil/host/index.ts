@@ -111,6 +111,12 @@ export class LayoutNode {
   readonly children: LayoutNode[] = []
   /** Measures the node while it has no children. */
   measure: MeasureFunction | null = null
+  /**
+   * The node's first baseline from the top of its border box while it has no children, such as
+   * a text's first line: it aligns by it where its parent aligns by baseline. Without one it
+   * aligns by its bottom edge, as CSS does for a box with no baseline.
+   */
+  baseline: number | null = null
   /** The box from the last `computeLayout` of a tree this node is in. */
   layout: Box = { left: 0, top: 0, width: 0, height: 0 }
 
@@ -157,7 +163,8 @@ const F = {
   GRID_TEMPLATE_COLUMNS: 46,
   GRID_TEMPLATE_ROWS: 48,
   MARGIN: 50,
-  STRIDE: 54
+  BASELINE: 54,
+  STRIDE: 55
 } as const
 
 const UNIT_AUTO = 0
@@ -374,6 +381,8 @@ function writeRecord(
   records[r + F.ROW_GAP] = s.rowGap ?? 0
   records[r + F.ASPECT_RATIO] = s.aspectRatio ?? Number.NaN
   records[r + F.MEASURED] = node.measure && node.children.length === 0 ? 1 : 0
+  records[r + F.BASELINE] =
+    node.baseline !== null && node.children.length === 0 ? node.baseline : Number.NaN
   writePlacement(records, r + F.GRID_COLUMN, s.gridColumn)
   writePlacement(records, r + F.GRID_ROW, s.gridRow)
   writeTracks(records, r + F.GRID_TEMPLATE_COLUMNS, s.gridTemplateColumns, tracks)

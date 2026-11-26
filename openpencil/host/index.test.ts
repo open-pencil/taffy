@@ -94,6 +94,46 @@ describe('computeLayout', () => {
     expect(calls.some(([known]) => known.width === 120)).toBe(true)
   })
 
+  test('aligns leaves by their baselines, and boxes without one by their bottom', () => {
+    const text = (height: number, baseline: number) => {
+      const node = new LayoutNode()
+      node.measure = () => ({ width: 30, height })
+      node.baseline = baseline
+      return node
+    }
+    const root = new LayoutNode({ alignItems: 'baseline' })
+    const big = text(39, 31)
+    const small = text(15, 12)
+    const square = new LayoutNode({ width: 20, height: 20 })
+    // A fixed size is not measured, and still aligns by the baseline it has.
+    const fixed = new LayoutNode({ width: 30, height: 15 })
+    fixed.baseline = 12
+    const nested = new LayoutNode({ flexDirection: 'column', padding: { top: 10, bottom: 10 } })
+    nested.append(text(15, 12))
+    for (const child of [big, small, square, fixed, nested]) root.append(child)
+    computeLayout(root)
+    expect(box(small).top).toBe(19)
+    expect(box(square).top).toBe(11)
+    expect(box(fixed).top).toBe(19)
+    expect(box(nested).top).toBe(9)
+  })
+
+  test('aligns each wrapped line by its own baseline', () => {
+    const root = new LayoutNode({ width: 70, flexWrap: 'wrap', alignItems: 'baseline' })
+    const items = [
+      [39, 31],
+      [15, 12],
+      [15, 12]
+    ].map(([height, baseline]) => {
+      const node = new LayoutNode({ width: 30, height })
+      node.baseline = baseline
+      root.append(node)
+      return node
+    })
+    computeLayout(root)
+    expect(items.map((item) => box(item).top)).toEqual([0, 19, 39])
+  })
+
   test('skips display none and lays out max-content roots', () => {
     const root = new LayoutNode()
     const hidden = new LayoutNode({ display: 'none', width: 50, height: 50 })
