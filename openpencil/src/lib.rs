@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use taffy::prelude::*;
 use taffy::style::Direction;
 use taffy::style_helpers::{line, span};
+use taffy::tree::Baselines;
 use taffy::{Overflow, Point};
 
 /// The record's fields, one f32 each; a length is a value followed by its unit.
@@ -55,7 +56,9 @@ mod field {
     pub const GRID_TEMPLATE_ROWS: usize = 48;
     /// Left, top, right, bottom, in points.
     pub const MARGIN: usize = 50;
-    pub const STRIDE: usize = 54;
+    /// A leaf's first baseline from the top of its border box; NaN for none.
+    pub const BASELINE: usize = 54;
+    pub const STRIDE: usize = 55;
 }
 
 /// Units of a length: points or a percentage as a fraction; any other code is `auto`.
@@ -292,7 +295,8 @@ pub unsafe extern "C" fn compute(
     let mut children: Vec<Vec<NodeId>> = vec![Vec::new(); count];
     for (index, r) in records.as_chunks::<{ field::STRIDE }>().0.iter().enumerate() {
         let style = style(r, all_tracks);
-        let id = if r[field::MEASURED] > 0.0 {
+        // A leaf that is measured or has a baseline keeps its index, to find its record.
+        let id = if r[field::MEASURED] > 0.0 || r[field::BASELINE].is_finite() {
             tree.new_leaf_with_context(style, index as u32)
         } else {
             tree.new_leaf(style)
@@ -311,13 +315,18 @@ pub unsafe extern "C" fn compute(
     }
 
     let space = Size { width: available(available_width), height: available(available_height) };
+    let records = records.as_chunks::<{ field::STRIDE }>().0;
     tree.compute_layout_with_measure(ids[0], space, |inputs, _id, context, style| {
-        taffy::compute_leaf_layout(
+        let record = context.as_deref().map(|&index| (index, &records[index as usize]));
+        let mut output = taffy::compute_leaf_layout(
             inputs,
             style,
             |_, _| 0.0,
             |known, available| {
-                let Some(&mut index) = context else { return Size::ZERO };
+                let Some((index, r)) = record else { return Size::ZERO };
+                if r[field::MEASURED] <= 0.0 {
+                    return Size::ZERO;
+                }
                 let (width, width_kind) = space_kind(available.width);
                 let (height, height_kind) = space_kind(available.height);
                 unsafe {
@@ -334,7 +343,15 @@ pub unsafe extern "C" fn compute(
                     Size { width, height }
                 }
             },
-        )
+        );
+        // A leaf's baseline aligns it where its parent aligns by baseline; one without aligns by
+        // its bottom edge.
+        if let Some((_, r)) = record
+            && r[field::BASELINE].is_finite()
+        {
+            output.baselines = Baselines::from_first(Some(r[field::BASELINE]));
+        }
+        output
     })
     .expect("a laid out tree");
 
